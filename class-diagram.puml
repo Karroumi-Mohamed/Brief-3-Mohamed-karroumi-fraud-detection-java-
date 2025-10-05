@@ -1,0 +1,290 @@
+@startuml Bank Card Management System
+
+' Entity Layer
+package "Entity Layer" {
+    enum StatutCarte {
+        ACTIVE
+        SUSPENDUE
+        BLOQUEE
+    }
+
+    enum TypeCarte {
+        DEBIT
+        CREDIT
+        PREPAYEE
+    }
+
+    enum TypeOperation {
+        ACHAT
+        RETRAIT
+        PAIEMENTENLIGNE
+    }
+
+    enum NiveauAlerte {
+        INFO
+        AVERTISSEMENT
+        CRITIQUE
+    }
+
+    class Client <<record>> {
+        +int id
+        +String nom
+        +String email
+        +String telephone
+    }
+
+    abstract class Carte <<sealed>> {
+        -int id
+        -String numero
+        -LocalDate dateExpiration
+        -StatutCarte statut
+        -int idClient
+        +getTypeCarte(): TypeCarte
+    }
+
+    class CarteDebit {
+        -BigDecimal plafondJournalier
+    }
+
+    class CarteCredit {
+        -BigDecimal plafondMensuel
+        -BigDecimal tauxInteret
+    }
+
+    class CartePrepayee {
+        -BigDecimal soldeDisponible
+    }
+
+    class OperationCarte <<record>> {
+        +int id
+        +LocalDateTime date
+        +BigDecimal montant
+        +TypeOperation type
+        +String lieu
+        +int idCarte
+    }
+
+    class AlerteFraude <<record>> {
+        +int id
+        +String description
+        +NiveauAlerte niveau
+        +int idCarte
+        +LocalDateTime dateCreation
+    }
+}
+
+' DAO Layer
+package "DAO Layer" {
+    class ClientDAO {
+        +save(Client): Client
+        +findById(int): Optional<Client>
+        +findAll(): List<Client>
+        +findByEmail(String): Optional<Client>
+        +findByTelephone(String): Optional<Client>
+        +update(Client): boolean
+        +delete(int): boolean
+    }
+
+    class CarteDAO {
+        +save(Carte): Carte
+        +findById(int): Optional<Carte>
+        +findAll(): List<Carte>
+        +findByClientId(int): List<Carte>
+        +update(Carte): boolean
+        +delete(int): boolean
+    }
+
+    class OperationDAO {
+        +save(OperationCarte): OperationCarte
+        +findById(int): Optional<OperationCarte>
+        +findAll(): List<OperationCarte>
+        +findByCarteId(int): List<OperationCarte>
+        +findByType(TypeOperation): List<OperationCarte>
+        +findByDateRange(LocalDateTime, LocalDateTime): List<OperationCarte>
+        +delete(int): boolean
+    }
+
+    class AlerteDAO {
+        +save(AlerteFraude): AlerteFraude
+        +findById(int): Optional<AlerteFraude>
+        +findAll(): List<AlerteFraude>
+        +findByCarteId(int): List<AlerteFraude>
+        +findByNiveau(NiveauAlerte): List<AlerteFraude>
+        +findCriticalAlerts(): List<AlerteFraude>
+        +delete(int): boolean
+    }
+}
+
+' Service Layer
+package "Service Layer" {
+    class ClientService {
+        -ClientDAO clientDAO
+        +creerClient(String, String, String): Client
+        +obtenirClient(int): Optional<Client>
+        +rechercherParEmail(String): Optional<Client>
+        +rechercherParTelephone(String): Optional<Client>
+        +modifierClient(Client): boolean
+        +supprimerClient(int): boolean
+    }
+
+    class CarteService {
+        -CarteDAO carteDAO
+        +creerCarteDebit(int, BigDecimal): CarteDebit
+        +creerCarteCredit(int, BigDecimal, BigDecimal): CarteCredit
+        +creerCartePrepayee(int, BigDecimal): CartePrepayee
+        +activerCarte(int): boolean
+        +suspendreCarte(int): boolean
+        +bloquerCarte(int): boolean
+        +verifierPlafond(int, BigDecimal): boolean
+    }
+
+    class OperationService {
+        -OperationDAO operationDAO
+        -CarteService carteService
+        +enregistrerOperation(int, BigDecimal, TypeOperation, String): OperationCarte
+        +obtenirOperationsCarte(int): List<OperationCarte>
+        +obtenirOperationsParType(TypeOperation): List<OperationCarte>
+    }
+
+    class FraudeService {
+        -OperationDAO operationDAO
+        -AlerteDAO alerteDAO
+        -CarteService carteService
+        +detecterFraudes(int): void
+        +creerAlerte(int, String, NiveauAlerte): AlerteFraude
+        +obtenirAlertesCarte(int): List<AlerteFraude>
+        +obtenirAlertesCritiques(): List<AlerteFraude>
+    }
+
+    class RapportService {
+        -CarteDAO carteDAO
+        -OperationDAO operationDAO
+        +obtenirTop5CartesUtilisees(): List<Entry<Integer, Long>>
+        +obtenirStatistiquesMensuelles(YearMonth): Map<TypeOperation, BigDecimal>
+        +obtenirCartesBloquees(): List<Carte>
+        +obtenirCartesSuspectes(): List<Carte>
+        +genererRapportComplet(): String
+    }
+}
+
+' UI Layer
+package "UI Layer" {
+    class MenuPrincipal {
+        -Scanner scanner
+        -ClientService clientService
+        -CarteService carteService
+        -OperationService operationService
+        -FraudeService fraudeService
+        -RapportService rapportService
+        +demarrer(): void
+        +main(String[]): void
+    }
+
+    class MenuClient {
+        -Scanner scanner
+        -ClientService clientService
+        +afficher(): void
+    }
+
+    class MenuCarte {
+        -Scanner scanner
+        -CarteService carteService
+        -ClientService clientService
+        +afficher(): void
+    }
+
+    class MenuOperation {
+        -Scanner scanner
+        -OperationService operationService
+        -CarteService carteService
+        +afficher(): void
+    }
+
+    class MenuFraude {
+        -Scanner scanner
+        -FraudeService fraudeService
+        +afficher(): void
+    }
+
+    class MenuRapport {
+        -Scanner scanner
+        -RapportService rapportService
+        +afficher(): void
+    }
+}
+
+' Util Layer
+package "Util Layer" {
+    class DatabaseConnection {
+        {static} -Connection connection
+        {static} +getInstance(): DatabaseConnection
+        +getConnection(): Connection
+        {static} +closeConnection(): void
+    }
+}
+
+' Relationships - Entity Layer
+Carte <|-- CarteDebit
+Carte <|-- CarteCredit
+Carte <|-- CartePrepayee
+Carte --> StatutCarte
+Carte --> TypeCarte
+OperationCarte --> TypeOperation
+AlerteFraude --> NiveauAlerte
+
+Client "1" -- "0..*" Carte : possède
+Carte "1" -- "0..*" OperationCarte : génère
+Carte "1" -- "0..*" AlerteFraude : déclenche
+
+' Relationships - DAO Layer
+ClientDAO ..> Client : uses
+CarteDAO ..> Carte : uses
+OperationDAO ..> OperationCarte : uses
+AlerteDAO ..> AlerteFraude : uses
+ClientDAO ..> DatabaseConnection : uses
+CarteDAO ..> DatabaseConnection : uses
+OperationDAO ..> DatabaseConnection : uses
+AlerteDAO ..> DatabaseConnection : uses
+
+' Relationships - Service Layer
+ClientService --> ClientDAO
+CarteService --> CarteDAO
+OperationService --> OperationDAO
+OperationService --> CarteService
+FraudeService --> OperationDAO
+FraudeService --> AlerteDAO
+FraudeService --> CarteService
+RapportService --> CarteDAO
+RapportService --> OperationDAO
+
+' Relationships - UI Layer
+MenuPrincipal --> MenuClient
+MenuPrincipal --> MenuCarte
+MenuPrincipal --> MenuOperation
+MenuPrincipal --> MenuFraude
+MenuPrincipal --> MenuRapport
+MenuClient --> ClientService
+MenuCarte --> CarteService
+MenuCarte --> ClientService
+MenuOperation --> OperationService
+MenuOperation --> CarteService
+MenuFraude --> FraudeService
+MenuRapport --> RapportService
+
+' Notes
+note right of Carte
+  Java 17 sealed class
+  with 3 permitted subclasses
+end note
+
+note right of Client
+  Java 17 record
+  (immutable)
+end note
+
+note right of DatabaseConnection
+  Singleton pattern
+  for connection reuse
+end note
+
+@enduml
